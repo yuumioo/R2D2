@@ -1,0 +1,27 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Raspberry Pi Car Control</title>
+</head>
+<body>
+  <h2>Send Command to Car</h2>
+  <input type="text" id="commandInput" placeholder="e.g. turn right and stop" size="40">
+  <button onclick="sendCommand()">Send</button>
+
+  <p id="response"></p>
+
+  <script>
+    async function sendCommand() {
+      const command = document.getElementById('commandInput').value;
+      const response = await fetch('/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command })
+      });
+      const data = await response.json();
+      document.getElementById('response').innerText = 'Sent action: ' + data.sent;
+    }
+  </script>
+</body>
+</html>
