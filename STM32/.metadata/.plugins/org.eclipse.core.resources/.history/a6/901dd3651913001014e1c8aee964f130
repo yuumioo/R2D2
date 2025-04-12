@@ -1,0 +1,25 @@
+/*
+ * motor.h
+ *
+ *  Created on: Apr 6, 2025
+ *      Author: benja
+ */
+#ifndef INC_MOTOR_H_
+#define INC_MOTOR_H_
+
+void IN_Forward(void){}
+
+void IN_Reverse(void){}
+
+void EN_Forward(void){}
+
+void EN_Reverse(void){}
+
+void
+
+
+
+
+
+
+#endif /* INC_MOTOR_H_ */

@@ -1,0 +1,59 @@
+/*
+ * motor.c
+ *
+ *  Created on: Apr 6, 2025
+ *      Author: benja
+ */
+#include "motor.h"
+
+void IN_Forward()
+{
+	HAL_GPIO_WritePin(GPIOC, IN1_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOC, IN2_Pin, GPIO_PIN_RESET);
+
+	HAL_GPIO_WritePin(GPIOC, IN3_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOC, IN4_Pin, GPIO_PIN_SET);
+}
+
+void IN_Reverse(void)
+{
+	HAL_GPIO_WritePin(GPIOC, IN1_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOC, IN2_Pin, GPIO_PIN_SET);
+
+	HAL_GPIO_WritePin(GPIOC, IN3_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOC, IN4_Pin, GPIO_PIN_RESET);
+}
+
+void IN_Left(void)
+{
+	HAL_GPIO_WritePin(GPIOC, IN1_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOC, IN2_Pin, GPIO_PIN_RESET);
+
+	HAL_GPIO_WritePin(GPIOC, IN3_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOC, IN4_Pin, GPIO_PIN_RESET);
+}
+
+
+void IN_Right(void)
+{
+	HAL_GPIO_WritePin(GPIOC, IN1_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOC, IN2_Pin, GPIO_PIN_RESET);
+
+	HAL_GPIO_WritePin(GPIOC, IN3_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOC, IN4_Pin, GPIO_PIN_RESET);
+}
+
+
+void EN_Forward(uint16_t pwm_val)
+{
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm_val); // ENA
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, pwm_val); // ENB
+}
+
+void EN_Reverse(void)
+{
+
+}

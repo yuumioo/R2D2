@@ -1,0 +1,10 @@
+/*
+ * motor.c
+ *
+ *  Created on: Apr 6, 2025
+ *      Author: benja
+ */
+#include "motor.h"
+#include "main.h"
+
+
