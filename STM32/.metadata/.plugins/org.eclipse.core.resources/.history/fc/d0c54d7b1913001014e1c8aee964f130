@@ -1,0 +1,19 @@
+/*
+ * motor.c
+ *
+ *  Created on: Apr 6, 2025
+ *      Author: benja
+ */
+#include "motor.h"
+#include "main.h"
+
+void IN_Forward()
+{
+	//Set motors to forward
+	HAL_GPIO_WritePin(GPIOC, IN1_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOC, IN2_Pin, GPIO_PIN_RESET);
+
+	HAL_GPIO_WritePin(GPIOC, IN3_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOC, IN4_Pin, GPIO_PIN_SET);
+}
+

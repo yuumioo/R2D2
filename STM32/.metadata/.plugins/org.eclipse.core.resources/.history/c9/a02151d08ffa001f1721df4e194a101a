@@ -1,0 +1,462 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Main program body
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2025 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include <math.h>
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+#define MPU6050_ADDR 0x68 << 1 //The 7 bit address is b110100X. Here the value of X depends on the pin AD0
+
+#define GYRO_CONFIG_REG 0x1B
+#define ACCEL_CONFIG_REG 0x1C
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
+SPI_HandleTypeDef hspi1;
+
+UART_HandleTypeDef huart2;
+
+/* USER CODE BEGIN PV */
+int16_t ax_offset = 0, ay_offset = 0, az_offset = 0;
+
+int16_t Accel_X_RAW = 0;
+int16_t Accel_Y_RAW = 0;
+int16_t Accel_Z_RAW = 0;
+float Ax, Ay, Az;
+
+uint8_t who_am_i;
+uint8_t Data;
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_USART2_UART_Init(void);
+static void MX_I2C1_Init(void);
+static void MX_SPI1_Init(void);
+/* USER CODE BEGIN PFP */
+void MPU6050_Init();
+void MPU6050_WriteRegister(uint8_t reg, uint8_t data);
+uint8_t MPU6050_ReadRegister(uint8_t reg);
+void MPU6050_ReadRegisters(uint8_t reg, uint8_t *buffer, uint8_t length);
+void MPU6050_ReadAccel(void);
+//for i2c
+
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+
+//MPU6050
+void MPU6050_WriteRegister(uint8_t reg, uint8_t data){ //Writes a single byte of data to a specific register in the MPU6050.
+
+	uint8_t buffer[2];
+	buffer[0] = reg;  	//1.Send the register address.
+	buffer[1] = data;   //2.Send the data to be written.
+	HAL_I2C_Master_Transmit(&hi2c1, MPU6050_ADDR, buffer, 2, HAL_MAX_DELAY);  //3.For I2C, HAL_I2C_Master_Transmit() is used.
+}
+
+//Reads a single byte of data from a specific register in the MPU6050.
+uint8_t MPU6050_ReadRegister(uint8_t reg){ //Write the register address.
+	uint8_t data;   // Read a single byte from that register.
+	HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, reg, I2C_MEMADD_SIZE_8BIT, &data, 1, HAL_MAX_DELAY); //For I2C, HAL_I2C_Mem_Read() is used.
+
+	return data;
+}
+
+// Reads multiple consecutive bytes from the MPU6050 starting at a specific register.
+void MPU6050_ReadRegisters(uint8_t reg, uint8_t *buffer, uint8_t length){ // Specify the starting register.  Read multiple bytes into a buffer.
+  HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, reg, I2C_MEMADD_SIZE_8BIT, buffer, length, HAL_MAX_DELAY);
+}
+
+//Reads raw accelerometer data from the MPU6050 and converts it into 16-bit signed integers.
+void MPU6050_ReadAccel(void){
+	uint8_t Rec_Data[6];
+
+	// Read 6 BYTES of data starting from ACCEL_XOUT_H (0x3B) register
+	HAL_I2C_Mem_Read (&hi2c1, MPU6050_ADDR, 0x3B, 1, Rec_Data, 6, 1000);
+	Accel_X_RAW = (int16_t)(Rec_Data[0] << 8 | Rec_Data [1]);
+	Accel_Y_RAW = (int16_t)(Rec_Data[2] << 8 | Rec_Data [3]);
+	Accel_Z_RAW = (int16_t)(Rec_Data[4] << 8 | Rec_Data [5]);
+	Ax = (float)Accel_X_RAW/16384.0;
+	Ay = (float)Accel_Y_RAW/16384.0;
+	Az = (float)Accel_Z_RAW/16384.0;
+}
+
+void MPU6050_Init (void){
+	who_am_i =  MPU6050_ReadRegister(0x75);  // Read WHO_AM_I
+
+    if (who_am_i == 0x68) {  // 0x68 will be returned by the sensor if everything goes well
+        // Power management register 0x6B: write 0 to wake the sensor up
+        MPU6050_WriteRegister(0x6B, 0x00);
+
+        // Set DATA RATE of 1KHz by writing SMPLRT_DIV register
+        MPU6050_WriteRegister(0x19, 0x07);
+
+        // Set Accelerometer configuration in ACCEL_CONFIG Register
+        MPU6050_WriteRegister(ACCEL_CONFIG_REG, 0x00);  // ± 2g
+
+        // Set Gyroscopic configuration in GYRO_CONFIG Register
+        MPU6050_WriteRegister(GYRO_CONFIG_REG, 0x00);  // ± 250 °/s
+    }
+}
+
+float Calculate_Tilt_Angle(float a1, float a2) {
+    return atan2(a1, a2) * (180.0 / M_PI);
+}
+
+
+
+//*****DISPLAY 8x8 MATRIX******
+void max7219_write (uint8_t Addr, uint8_t data)
+{
+	uint16_t writeData = (Addr<<8)|data;
+	HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, 0);  // enable slave
+	HAL_SPI_Transmit(&hspi1, (uint8_t *)&writeData, 1, 100);
+	HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, 1);  // disable slave
+}
+
+void matrixInit (void)
+{
+	max7219_write(0x09, 0);  // no decoding
+	max7219_write(0x0a, 0x01);  // 3/32 intensity
+	max7219_write(0x0B, 0x07);  // scan all 7 columns
+	max7219_write(0x0C, 0x01);  // normal operation
+	max7219_write(0x0F, 0);     // No display test
+}
+
+void Display_Tilt_Status(float ax, float ay, float az) {
+	    // Calculate tilt angles
+	    float angleX = Calculate_Tilt_Angle(ax, az);
+	    float angleY = Calculate_Tilt_Angle(ay, az);
+
+	    // Map -90 to 90 degrees into 0 to 7 for the 8x8 grid
+	    int8_t displayX = (int8_t)((angleX + 45) / 90 * 8);
+	    int8_t displayY = (int8_t)((angleY + 45) / 90 * 8);
+
+	    // Ensure displayX and displayY are within valid range (0 to 7)
+	    displayX = (displayX < 0) ? 0 : (displayX > 8) ? 8 : displayX;
+	    displayY = (displayY < 0) ? 0 : (displayY > 8) ? 8 : displayY;
+
+	    // Clear the display
+	    for (int i = 1; i <= 8; i++) {
+	        max7219_write(i, 0x00); // Turn off all LEDs
+	    }
+
+	    // Display a dot at the calculated position
+	    max7219_write(displayY + 1, 0x01 << displayX); // Light up the LED at (displayX, displayY)
+}
+
+
+//for i2c
+
+
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+
+  /* USER CODE BEGIN 1 */
+
+  /* USER CODE END 1 */
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+  MX_I2C1_Init();
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_USART2_UART_Init();
+  MX_I2C1_Init();
+  MX_SPI1_Init();
+  /* USER CODE BEGIN 2 */
+  matrixInit();
+  MPU6050_Init();
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+    /* USER CODE END WHILE */
+    /* USER CODE BEGIN 3 */
+	  //	max7219_write(1, 0b00011000);
+	    MPU6050_ReadAccel();
+	    Display_Tilt_Status(Ax, Ay, Az);
+	    HAL_Delay(100);
+  }
+  /* USER CODE END 3 */
+}
+
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  /** Configure the main internal regulator output voltage
+  */
+  __HAL_RCC_PWR_CLK_ENABLE();
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
+
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 16;
+  RCC_OscInitStruct.PLL.PLLN = 336;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+  RCC_OscInitStruct.PLL.PLLQ = 7;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_1LINE;
+  hspi1.Init.DataSize = SPI_DATASIZE_16BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_HIGH;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : B1_Pin */
+  GPIO_InitStruct.Pin = B1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : CS_Pin */
+  GPIO_InitStruct.Pin = CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(CS_GPIO_Port, &GPIO_InitStruct);
+
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
+}
+
+/* USER CODE BEGIN 4 */
+
+/* USER CODE END 4 */
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+
+#ifdef  USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */

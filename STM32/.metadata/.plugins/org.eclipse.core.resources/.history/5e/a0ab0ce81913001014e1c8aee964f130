@@ -1,0 +1,34 @@
+/*
+ * motor.c
+ *
+ *  Created on: Apr 6, 2025
+ *      Author: benja
+ */
+#include "motor.h"
+#include "main.h"
+extern TIM_HandleTypeDef htim1;
+
+void IN_Forward()
+{
+	//Set motors to forward
+	HAL_GPIO_WritePin(GPIOC, IN1_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOC, IN2_Pin, GPIO_PIN_RESET);
+
+	HAL_GPIO_WritePin(GPIOC, IN3_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOC, IN4_Pin, GPIO_PIN_SET);
+}
+
+void IN_Reverse(void)
+{
+
+}
+
+void EN_Forward(void)
+{
+
+}
+
+void EN_Reverse(void)
+{
+
+}
