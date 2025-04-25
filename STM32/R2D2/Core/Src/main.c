@@ -42,6 +42,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
@@ -59,14 +60,14 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
-
 
 
 void Start_PWM(void){
 
-	IN_Reverse();
-	uint32_t pwm_val = 0.75* (htim1.Init.Period + 1);
+	IN_Forward();
+	uint32_t pwm_val = 0.9* (htim1.Init.Period + 1);
 	Set_PWM_EN(pwm_val);
 }
 
@@ -76,21 +77,27 @@ void Stop_PWM(void){
 	Set_PWM_EN(pwm_val);
 }
 
+
+//fix all these 2 into motor.c
 void Turn_Right(void){
 
 	IN_Right();
-	uint32_t pwm_val = 0.75* (htim1.Init.Period + 1);
+	uint32_t pwm_val = 0.85* (htim1.Init.Period + 1);
 	Set_PWM_EN(pwm_val);
 }
 
 void Turn_Left(void){
 
 	IN_Left();
-	uint32_t pwm_val = 0.75* (htim1.Init.Period + 1);
+	uint32_t pwm_val = 0.9* (htim1.Init.Period + 1);
 	Set_PWM_EN(pwm_val);
 }
 
-
+// keep as is
+void StartBuzzer(void){
+	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0.5 * (htim3.Init.Period + 1)); ////50% duty cycle
+}
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	uint8_t response[] = "it worked!\r\n";
@@ -101,7 +108,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		if((curr_tick - last_tick) > Debounce_Delay)
 		{
 			last_tick = curr_tick;
-			Start_PWM();
+			//Start_PWM();
+			__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 500);
 		}
 	}
 }
@@ -182,6 +190,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM1_Init();
   MX_USART1_UART_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart1,buffer, 1);
   /* USER CODE END 2 */
@@ -319,6 +328,65 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 2 */
   HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 83;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 999;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
 
 }
 
